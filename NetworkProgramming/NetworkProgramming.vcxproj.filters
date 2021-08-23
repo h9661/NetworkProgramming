@@ -15,7 +15,10 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp">
+    <ClCompile Include="Chapter 1 네트워크 프로그래밍과 소켓의 이해.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Chapter 2 소켓의 타입과 프로토콜의 설정.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>

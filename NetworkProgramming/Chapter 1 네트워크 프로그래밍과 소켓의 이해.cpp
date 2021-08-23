@@ -85,17 +85,22 @@ int main(int argc, char* argv[]) {
 
 	WSAStartup(MAKEWORD(2, 2), &wsaData);
 
+	//전화기 장만
 	hSocket = socket(PF_INET, SOCK_STREAM, 0);
 
+	//연결할 서버 주소로 정보 초기화
 	memset(&servAdr, 0, sizeof(servAdr));
 	servAdr.sin_family = AF_INET;
 	servAdr.sin_addr.s_addr = inet_addr(argv[1]);
 	servAdr.sin_port = htons(atoi(argv[2]));
 
+	//전화 걸기
 	connect(hSocket, (SOCKADDR*)&servAdr, sizeof(servAdr));
 
+	//메시지 받기
 	strLen = recv(hSocket, message, sizeof(message) - 1, 0);
 
+	//출력
 	printf("Message From Server : %s \n", message);
 
 	closesocket(hSocket);
