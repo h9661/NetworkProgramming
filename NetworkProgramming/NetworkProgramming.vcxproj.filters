@@ -21,5 +21,8 @@
     <ClCompile Include="Chapter 2 소켓의 타입과 프로토콜의 설정.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="Chapter 3 주소체계와 데이터 정렬.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
