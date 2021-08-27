@@ -30,5 +30,8 @@
     <ClCompile Include="Chapter 5 TCP 기반 서버 클라이언트 2.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="Chapter 6 UDP 기반 서버 클라이언트.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
