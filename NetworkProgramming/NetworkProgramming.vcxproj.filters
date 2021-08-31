@@ -36,5 +36,8 @@
     <ClCompile Include="Chapter 7 소켓의 우아한 연결 종료.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="Chapter 8 도메인 이름과 인터넷 주소.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
