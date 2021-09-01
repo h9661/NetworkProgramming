@@ -147,6 +147,7 @@
     <ClCompile Include="Chapter 6 UDP 기반 서버 클라이언트.cpp" />
     <ClCompile Include="Chapter 7 소켓의 우아한 연결 종료.cpp" />
     <ClCompile Include="Chapter 8 도메인 이름과 인터넷 주소.cpp" />
+    <ClCompile Include="Chapter 9 소켓의 다양한 옵션.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
