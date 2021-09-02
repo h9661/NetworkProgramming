@@ -140,6 +140,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Chapter 1 네트워크 프로그래밍과 소켓의 이해.cpp" />
+    <ClCompile Include="Chapter 10 멀티 프로세스 기반의 서버 구현.cpp" />
     <ClCompile Include="Chapter 2 소켓의 타입과 프로토콜의 설정.cpp" />
     <ClCompile Include="Chapter 3 주소체계와 데이터 정렬.cpp" />
     <ClCompile Include="Chapter 4 TCP 기반 서버 클라이언트 1.cpp" />

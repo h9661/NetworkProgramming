@@ -42,5 +42,8 @@
     <ClCompile Include="Chapter 9 소켓의 다양한 옵션.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="Chapter 10 멀티 프로세스 기반의 서버 구현.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
