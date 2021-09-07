@@ -318,3 +318,148 @@ int main()
 
 	return 0;
 }
+
+/*
+* <<4. 멀티 태스킹 기반의 다중 접속 서버>>
+* 드디어 여러분은 fork 함수 호출을 통한 다중 접속 서버의 구현 준비를 끝냈다.
+* 
+* 1. 프로세스 기반의 다중 접속 서버의 구현 모델
+* 1) 에코 서버는 accept 함수 호출을 통해서 연결 요청을 수락한다.
+* 2) 이때 얻게 되는 소켓의 파일 디스크럽터를 자식 프로세스를 생성해서 넘겨준다.
+* 3) 자식 프로세스는 전달받는 파일 디스크럽터를 바탕으로 서비스를 제공한다.
+* 
+* 2. 다중 접속 에코 서버 구현
+*/
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
+#define BUF_SIZE 30
+
+void read_childproc(int sig)
+
+int main(int argc, char* argv[])
+{
+	int serv_sock, clnt_sock;
+	struct sockaddr_in serv_adr, clnt_adr;
+
+	pid_t pid;
+	struct sigaction act;
+	socklen_t adr_sz;
+	int str_len, state;
+	char buf[BUF_SIZE];
+
+	act.sa_handler = read_childproc;
+	sigemptyset(&act.sa_mask);
+	act.sa_flags = 0;
+
+	state = sigaction(SIGCHLD, &act, 0);
+
+	serv_sock = socket(PF_INET, SOCK_STREAM, 0);
+
+	memset(&serv_adr, 0, sizeof(serv_adr));
+	serv_adr.sin_family = AF_INET;
+	serv_adr.sin_addr.s_addr = htonl(INADDR_ANY);
+	serv_adr.sin_port = htons(atoi(argv[1]));
+
+	bind(serv_sock, (struct sockaddr*)&serv_adr, sizeof(serv_adr));
+
+	listen(serv_sock, 5);
+
+	while (1)
+	{
+		adr_sz = sizeof(clnt_adr);
+
+		clnt_sock = accept(serv_sock, (struct sockaddr*)&clnt_adr, &adr_sz);
+
+		pid = fork();
+
+		if (pid == 0)
+		{
+			close(serv_sock);
+
+			while (str_len = read(clnt_sock, buf, BUF_SIZE)) != 0)
+				write(clnt_sock, buf, str_len);
+
+			close(clnt_sock);
+			puts("client disconnected..");
+			return 0;
+		}
+		else
+			close(clnt_sock);
+	}
+
+	close(serv_sock);
+	return 0;
+}
+
+void read_childproc(int sig)
+{
+	pit_t pid;
+	int status;
+
+	pid = waitpid(-1, &status, WNOHANG);
+
+	printf("removed proc id : %d \n", pid);
+}
+/*
+* 3. fork() 함수 호출을 통한 파일 디스크럽터의 복사
+* 소켓도 복사되니 상관없는 것은 닫아줘서 자원 관리를 잘 하자. 위의 예제를 보면 알 수 있다.
+* 
+* <<5. TCP의 입출력 루틴 분할>>
+* 1. 입출력 루틴 분할의 의미와 이점
+* 부모 프로세스는 데이터 수신을 담당하고, 별도로 생성된 자식 프로세스는 데이터의 송신을 담당한다.
+* 이렇게 구현해 놓으면 입력과 출력을 담당하는 프로세스가 각각 다르기 때문에
+* 데이터의 수신 여부에 상관 없이 데이터를 전송할 수 있다. 이런 구현방식을 택하는 이유는 프로그램의 구현이 한결 수월해지는 데에 있다.
+* 
+* 2. 에코 클라이언트의 입출력 루틴 분할
+*/
+void read_routine(int sock, char* buf)
+{
+	while (1)
+	{
+		int str_len = read(sock, buf, BUF_SIZE);
+
+		if (str_len == 0)
+			return;
+
+		buf[str_len] = 0;
+
+		printf("Message From Server : %s \n", buf);
+	}
+}
+
+void write_routine(int sock, char* buf)
+{
+	while (1)
+	{
+		fgets(buf, BUF_SIZE, stdin);
+
+		if (!strcmp(buf, "q\n" || !strcmp(buf, "Q\n"))
+		{
+			shutdown(sock, SHUT_WR);
+				return;
+		}
+
+		write(sock, buf, strlen(buf));
+	}
+}
+
+int main(int argc, char* argv[])
+{
+	…
+
+		pid = fork();
+
+	if (pid == 0);
+		write_routine(sock, buf);
+	else
+		read_routine(sock, buf);
+
+	…
+}
