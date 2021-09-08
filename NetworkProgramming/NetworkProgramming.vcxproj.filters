@@ -48,5 +48,8 @@
     <ClCompile Include="Chapter 11 프로세스간 통신.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="Chapter 19 윈도우에서 쓰레드 사용.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
