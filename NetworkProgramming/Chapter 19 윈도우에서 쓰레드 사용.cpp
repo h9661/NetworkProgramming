@@ -121,7 +121,7 @@ DWORD WINAPI ThreadFunc(LPVOID arg)
 
 	이번에는 둘 이상의 커널 오브젝트를 대상으로 상태를 확인하는 경우에 호출하는 함수이다.
 
-		#include <windows.h>
+	#include <windows.h>
 
 	DWORD WaitForMultipleObjects(DWORD nCount, const HANDLE* lpHandles, BOOL bWaitAll, DWORD dwMiliseconds);
 

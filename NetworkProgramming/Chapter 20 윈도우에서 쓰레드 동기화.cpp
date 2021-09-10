@@ -272,3 +272,288 @@ DWORD WINAPI Accu(LPVOID arg)
 	return 0;
 }
 
+/*
+* 3. Event 기반의 동기화
+* 이번에 소개하는 Event 동기화 오브젝트는 앞에서 소개한 것들과는 차이가 있다. 이는 오브젝트를 생성하는 과정에서 auto와 manual을 선택할 수 있다는 점이다.
+* 
+* 	#include <windows.h>
+	
+	HANDLE CreateEvent(
+		LPSECURITY_ATTRIBUTES lpEventAttributes, 
+		BOOL bManualReset,
+		BOOL bInitialState,
+		LPCTSTR lpName
+	);
+
+	lpEventAttributes	: NULL
+	bManualReset		: TRUE -> manual-reset, FALSE -> auto-reset
+	bInitialState		: TRUE -> signaled, FALSE -> non-signaled
+	lpName				: NULL
+
+	Event 오브젝트가 Manual 모드로 생성되면 다음 두 함수를 이용해서 명시적으로 오브젝트의 상태를 변경해야 한다.
+
+
+	#include <windows.h>
+
+	BOOL ResetEvent(HANDLE hEvent);   // signaled -> non-signaled
+	BOOL SetEvent(HANDLE hEvent);     // non-signaled -> siganaled
+
+*/
+
+#include <stdio.h>
+#include <windows.h>
+#include <process.h>
+
+#define STR_LEN 100
+
+DWORD WINAPI NumberOfA(LPVOID arg);
+DWORD WINAPI NumberOfOthers(LPVOID arg);
+
+static char str[STR_LEN];
+static HANDLE hEvent;
+
+int main()
+{
+	HANDLE hThread1, hThread2;
+
+	hEvent = CreateEvent(NULL, TRUE, FALSE, NULL); // manual-reset, non-signaled
+
+	hThread1 = (HANDLE)_beginthreadex(NULL, 0, NumberOfA, NULL, 0, NULL);
+	hThread2 = (HANDLE)_beginthreadex(NULL, 0, NumberOfOthers, NULL, 0, NULL);
+
+	fputs("Input string: ", stdout);
+	fgets(str, STR_LEN, stdin);
+
+	SetEvent(hEvent);   // non-signaled -> signaled
+
+	WaitForSingleObject(hThread1, INFINITE);
+	WaitForSingleObject(hThread2, INFINITE);
+
+	ResetEvent(hEvent); // signaled -> non-signaled
+
+	CloseHandle(hEvent);
+	return 0;
+}
+
+DWORD WINAPI NumberOfA(LPVOID arg)
+{
+	int i, cnt = 0;
+
+	WaitForSingleObject(hEvent, INFINITE);
+
+	for (i = 0; str[i]; i++)
+	{
+		if (str[i] == 'A')
+			cnt++;
+	}
+
+	printf("Num of A: %d \n", cnt);
+	return 0;
+}
+
+DWORD WINAPI NumberOfOthers(LPVOID arg)
+{
+	int i, cnt = 0;
+
+	WaitForSingleObject(hEvent, INFINITE);
+
+	for (i = 0; str[i]; i++)
+	{
+		if (str[i] != 'A')
+			cnt++;
+	}
+
+	printf("Num of Others: %d \n", cnt - 1);
+	return 0;
+}
+
+/*
+* <<3. 윈도우 기반의 멀티 쓰레드 서버 구현>>
+*/
+// 서버
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <windows.h>
+#include <process.h>
+#define BUF_SIZE 100
+#define MAX_CLNT 256
+
+DWORD WINAPI HandleClnt(LPVOID arg);
+void SendMsg(char* msg, int len);
+
+int clntCnt = 0;
+SOCKET clntSocks[MAX_CLNT];
+HANDLE hMutex;
+
+int main(int argc, char* argv[])
+{
+	WSADATA wsaData;
+	SOCKET hServSock, hClntSock;
+	SOCKADDR_IN servAdr, clntAdr;
+	int clntAdrSz;
+	HANDLE hThread;
+
+	if (argc != 2)
+	{
+		printf("Usage: %s <port>\n", argv[0]);
+		exit(1);
+	}
+
+	WSAStartup(MAKEWORD(2, 2), &wsaData);
+
+	hMutex = CreateMutex(NULL, FALSE, NULL);
+
+	hServSock = socket(PF_INET, SOCK_STREAM, 0);
+
+	memset(&servAdr, 0, sizeof(servAdr));
+	servAdr.sin_family = AF_INET;
+	servAdr.sin_addr.s_addr = htonl(INADDR_ANY);
+	servAdr.sin_port = htons(atoi(argv[1]));
+
+	bind(hServSock, (SOCKADDR*)&servAdr, sizeof(servAdr));
+
+	listen(hServSock, 5);
+
+	while (1)
+	{
+		clntAdrSz = sizeof(clntAdr);
+		hClntSock = accept(hServSock, (SOCKADDR*)&clntAdr, clntAdrSz);
+
+		WaitForSingleObject(hMutex, INFINITE);
+		clntSocks[clntCnt++] = hClntSock;
+		ReleaseMutex(hMutex);
+
+		hThread = (HANDLE)_beginthreadex(NULL, 0, HandleClnt, (void*)&hClntSock, 0, NULL);
+
+		printf("Connected client IP: %s \n", inet_ntoa(clntAdr.sin_addr));
+	}
+
+	closesocket(hServSock);
+	WSACleanup();
+	return 0;
+}
+
+DWORD WINAPI HandleClnt(LPVOID arg)
+{
+	SOCKET hClntSock = *((SOCKET*)arg);
+	int strLen = 0, i;
+	char msg[BUF_SIZE];
+
+	while ((strLen = recv(hClntSock, msg, sizeof(msg), 0)) != 0)
+		SendMsg(msg, strLen);
+
+	WaitForSingleObject(hMutex, INFINITE);
+	for (i = 0; i < clntCnt; i++)
+	{
+		if (hClntSock == clntSocks[i])
+		{
+			while (i++ < clntCnt - 1)
+				clntSocks[i] = clntSocks[i + 1];
+			break;
+		}
+	}
+	clntCnt--;
+	ReleaseMutex(hMutex);
+
+	closesocket(hClntSock);
+	return 0;
+}
+
+void SendMsg(char* msg, int len)
+{
+	int i;
+
+	WaitForSingleObject(hMutex, INFINITE);
+	for (i = 0; i < clntCnt; i++)
+		send(clntSocks[i], msg, len, 0);
+	ReleaseMutex(hMutex);
+}
+
+//클라이언트
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <windows.h>
+#include <process.h>
+#define BUF_SIZE 100
+#define NAME_SIZE 20
+
+DWORD WINAPI SendMsg(LPVOID arg);
+DWORD WINAPI RecvMsg(LPVOID arg);
+
+char name[NAME_SIZE] = "[DEFAULT]";
+char msg[BUF_SIZE];
+
+int main(int argc, char* argv[])
+{
+	WSADATA wsaData;
+	SOCKET hSock;
+	SOCKADDR_IN servAdr;
+	HANDLE hSndThread, hRcvThread;
+
+	WSAStartup(MAKEWORD(2, 2), &wsaData);
+
+	sprintf(name, "[%s]", argv[3]);
+
+	hSock = socket(PF_INET, SOCK_STREAM, 0);
+
+	memset(&servAdr, 0, sizeof(servAdr));
+	servAdr.sin_family = AF_INET;
+	servAdr.sin_addr.s_addr = inet_addr(argv[1]);
+	servAdr.sin_port = htons(atoi(argv[2]));
+
+	connect(hSock, (SOCKADDR*)&servAdr, sizeof(servAdr));
+
+	hSndThread = (HANDLE)_beginthreadex(NULL, 0, SendMsg, (LPVOID)&hSock, 0, NULL);
+	hRcvThread = (HANDLE)_beginthreadex(NULL, 0, RecvMsg, (LPVOID)&hSock, 0, NULL);
+
+	WaitForSingleObject(hSndThread, INFINITE);
+	WaitForSingleObject(hRcvThread, INFINITE);
+
+	closesocket(hSock);
+	WSACleanup();
+	return 0;
+}
+
+DWORD WINAPI SendMsg(LPVOID arg)
+{
+	SOCKET hSock = *((SOCKET*)arg);
+	char nameMsg[NAME_SIZE + BUF_SIZE];
+
+	while (1)
+	{
+		fgets(msg, BUF_SIZE, stdin);
+
+		if (!strcmp(msg, "q\n") || !strcmp(msg, "Q\n"))
+		{
+			closesocket(hSock);
+			exit(0);
+		}
+
+		sprintf(nameMsg, "%s %s", name, msg);
+		send(hSock, nameMsg, strlen(nameMsg), 0);
+	}
+
+	return 0;
+}
+
+DWORD WINAPI RecvMsg(LPVOID arg)
+{
+	SOCKET hSock = *((SOCKET*)arg);
+	char nameMsg[NAME_SIZE + BUF_SIZE];
+	int strLen;
+
+	while (1)
+	{
+		strLen = recv(hSock, nameMsg, NAME_SIZE + BUF_SIZE - 1, 0);
+		if (strLen == -1)
+			return -1;
+
+		nameMsg[strLen] = 0;
+		fputs(nameMsg, stdout);
+	}
+
+	return 0;
+}
