@@ -54,5 +54,8 @@
     <ClCompile Include="Chapter 20 윈도우에서 쓰레드 동기화.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="Chapter 21 Asynchronous Notification IO model.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
