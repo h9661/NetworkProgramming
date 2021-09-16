@@ -47,7 +47,7 @@
 * 오브젝트 제거
 * 
 * 3. 이벤트의 발생 유무 확인
-* 이벤트의 발생 유무를 확인하기 위해서는 Event 오브젝트를 확인해야 하낟. 이때 사용하는 함수는 다음과 같다.
+* 이벤트의 발생 유무를 확인하기 위해서는 Event 오브젝트를 확인해야 한다. 이때 사용하는 함수는 다음과 같다.
 * 
 * #include <winsock2.h>
 * 
@@ -64,5 +64,162 @@
 * 
 * 이는 소켓의 이벤트 발생에 의해서 Event 오브젝트가 siganled 상태가 되어야 반환하는 함수이므로 소켓의 이벤트 발생여부를 확인하기에 좋은 함수다.
 * 
+* 4. 이벤트 종류의 구분
+* WSAWaitForMultipleEvents 함수를 통해서 signaled 상태로 전이된 Event 오브젝트까지 알아 낼 수 있게 되었다
+* 이제 마지막으로 해당 오브젝트가 signaled 상태가 된 원인을 확인해야 한다. 그리고 이를 알아내기 위한 함수를 소개한다.
+* 이 함수의 호출을 위해선 signaled 상태의 event 오브젝트 핸들뿐만 아니라, 이와 연결된 소켓의 핸들도 필요하다.
 * 
+* #include <winsock2.h>
+* 
+* int WSAEnumNetworkEvents(SOCKET s, WSAEVENT hEventObject, LPWSANETWORKEVENTS lpNetworkEvents);
+* 성공 시 0, 실패 시 SOCKET_ERROR 반환
+* 
+* s					: 이벤트가 발생한 소켓의 핸들 전달
+* hEventObject		: 소켓과 연결된 signaled 상태인 Event 오브젝트의 핸들 전달
+* lpNetworkEvents	: 발생한 이벤트의 유형정보와 오류정보로 채워질 WSANETWORKEVENTS 구조체 변수의 주소값 전달
+* 
+* 이 함수는 menual reset모드의 signaled Event 오브젝트를 non-signaled 상태로 변경까지 해준다.
+* 이제 위 함수와 관련있는 구조체 WSANETWORKEVENTS를 소개하겠다.
+* 
+* typedef struct _WSANETWORKEVENTS{
+*	long lNetworkEvents;
+*	int iErrorCode[FD_MAX_EVENTS];
+*}WSANETWORKEVENTS, *LPWSANETWORKEVENTS;
+* 
+* 위의 구조체 맴버 lNetworkEvents에는 발생한 이벤트의 정보가 담긴다. WSAEventSelect 함수의 세 번째 인자로 전달되는 상수와 마찬가지로
+* 수신할 데이터가 존재하면 FD_READ가 저장되고, 연결요청이 있는 경우에는 FD_ACCEPT가 담긴다. 따라서 다음과 같은 방식으로 이벤트의 종류를 확인할 수 있다.
+* 
+* WSANETWORKEVENTS netEvents;
+* ...
+* WSAEnumNetworkEvents(hSock, hEvent, &netEvents);
+* if(netEvents.lNetworkEvents & FD_ACCEPT){
+* ...
+* }
+* if(netEvents.lNetworkEvents & FD_READ){
+* ...
+* }
+* 
+* 그리고 오류코드는 iErrorCode에 담긴다. 이제 예제를 작성해보자.
 */
+// 비동기 알림 입출력 모델 에코서버 구현
+
+#include <stdio.h>
+#include <string.h>
+#include <WinSock2.h>
+
+#define BUF_SIZE 100
+
+void CompressSockets(SOCKET hSockArr[], int idx, int total);
+void CompressEvents(WSAEVENT hEventArr[], int idx, int total);
+void ErrorHandling(char* msg);
+
+int main(int argc, char* argv[]) {
+	WSADATA wsaData;
+	SOCKET hServSock, hClntSock;
+	SOCKADDR_IN servAdr, clntAdr;
+
+	SOCKET hSockArr[WSA_MAXIMUM_WAIT_EVENTS];
+	WSAEVENT hEventArr[WSA_MAXIMUM_WAIT_EVENTS];
+	WSAEVENT newEvent;
+	WSANETWORKEVENTS netEvents;
+
+	int numOfClntSock = 0;
+	int strLen, i;
+	int posInfo, startIdx;
+	int clntAdrLen;
+	char msg[BUF_SIZE];
+
+	WSAStartup(MAKEWORD(2, 2), &wsaData);
+
+	hServSock = socket(PF_INET, SOCK_DGRAM, 0);
+	memset(&servAdr, 0, sizeof(servAdr));
+	servAdr.sin_family = AF_INET;
+	servAdr.sin_addr.s_addr = htonl(INADDR_ANY);
+	servAdr.sin_port = htons(atoi(argv[1]));
+
+	bind(hServSock, (SOCKADDR*)&servAdr, sizeof(servAdr));
+
+	listen(hServSock, 5);
+
+	newEvent = WSACreateEvent();
+
+	WSAEventSelect(hServSock, newEvent, FD_ACCEPT);
+
+	hSockArr[numOfClntSock] = hServSock;
+	hEventArr[numOfClntSock] = newEvent;
+	numOfClntSock++;
+
+
+	while (1) {
+		posInfo = WSAWaitForMultipleEvents(numOfClntSock, hEventArr, FALSE, WSA_INFINITE, FALSE);
+
+		startIdx = posInfo - WSA_WAIT_EVENT_0;
+
+		for (i = startIdx; i < numOfClntSock; i++) {
+			int sigEventIdx = WSAWaitForMultipleEvents(1, &hEventArr[i], TRUE, 0, FALSE);
+
+			if ((sigEventIdx == WSA_WAIT_FAILED || sigEventIdx == WSA_WAIT_TIMEOUT))
+				continue;
+			else {
+				sigEventIdx = i;
+				WSAEnumNetworkEvents(hSockArr[sigEventIdx], hEventArr[sigEventIdx], &netEvents);
+
+				if (netEvents.lNetworkEvents & FD_ACCEPT) {
+					if (netEvents.iErrorCode[FD_ACCEPT_BIT] != 0) {
+						puts("Accept Error!");
+						break;
+					}
+
+					clntAdrLen = sizeof(clntAdr);
+					hClntSock = accept(hSockArr[sigEventIdx], (SOCKADDR*)&clntAdr, &clntAdrLen);
+					newEvent = WSACreateEvent;
+					WSAEventSelect(hClntSock, newEvent, FD_READ | FD_CLOSE);
+
+					hEventArr[numOfClntSock] = newEvent;
+					hSockArr[numOfClntSock] = hClntSock;
+					numOfClntSock++;
+					puts("connected new client");
+				}
+
+				if (netEvents.lNetworkEvents & FD_READ) {
+					if (netEvents.iErrorCode[FD_READ_BIT] != 0) {
+						puts("Read Error");
+						break;
+					}
+
+					strLen = recv(hSockArr[sigEventIdx], msg, sizeof(msg), 0);
+					send(hSockArr[sigEventIdx], msg, strLen, 0);
+				}
+
+				if (netEvents.lNetworkEvents & FD_CLOSE) {
+					if (netEvents.iErrorCode[FD_CLOSE_BIT] != 0) {
+						puts("Close Error");
+						break;
+					}
+
+					WSACloseEvent(hEventArr[sigEventIdx]);
+					closesocket(hSockArr[sigEventIdx]);
+					numOfClntSock--;
+					CompressSockets(hSockArr, sigEventIdx, numOfClntSock);
+					CompressEvents(hEventArr, sigEventIdx, numOfClntSock);
+				}
+			}
+		}
+	}
+	WSACleanup();
+	return 0;
+}
+
+void CompressSockets(SOCKET hSockArr[], int idx, int total) {
+	int i;
+
+	for (i = idx; i < total; i++)
+		hSockArr[i] = hSockArr[i + 1];
+}
+
+void CompressEvents(WSAEVENT hEventArr[], int idx, int total) {
+	int i;
+
+	for (i = idx; i < total; i++)
+		hEventArr[i] = hEventArr[i + 1];
+}
